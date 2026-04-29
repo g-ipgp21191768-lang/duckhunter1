@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Misi Memburu Itik - Kenali Frasa Nama</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #111;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #87CEEB; /* Sky color */
+            cursor: none; /* Hide default cursor to use custom crosshair */
+        }
+
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none; /* Let clicks pass through to canvas */
+        }
+
+        .pixel-border {
+            border: 4px solid #fff;
+            box-shadow: 
+                inset 4px 4px 0px 0px rgba(255,255,255,0.5),
+                inset -4px -4px 0px 0px rgba(0,0,0,0.5),
+                4px 4px 0px 0px #000;
+        }
+
+        .btn-minecraft {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            font-size: 16px;
+            text-transform: uppercase;
+            cursor: pointer;
+            pointer-events: auto;
+            image-rendering: pixelated;
+        }
+        
+        .btn-minecraft:hover {
+            background-color: #45a049;
+        }
+
+        .btn-minecraft:active {
+            box-shadow: inset 4px 4px 0px 0px rgba(0,0,0,0.5);
+            transform: translateY(2px);
+        }
+
+        /* Overlay Screens */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Question Panel */
+        #question-panel {
+            background-color: #8B4513; /* Dirt color */
+            color: white;
+            padding: 20px;
+            margin: 20px;
+            max-width: 800px;
+            pointer-events: auto;
+        }
+
+        .option-text {
+            font-size: 10px;
+            line-height: 1.5;
+            margin-top: 10px;
+            background: #5D310C;
+            padding: 10px;
+        }
+
+        #crosshair {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            pointer-events: none;
+            z-index: 40;
+            transform: translate(-50%, -50%);
+        }
+        
+        .crosshair-line-h {
+            position: absolute;
+            top: 19px;
+            left: 0;
+            width: 40px;
+            height: 2px;
+            background-color: red;
+        }
+        .crosshair-line-v {
+            position: absolute;
+            top: 0;
+            left: 19px;
+            width: 2px;
+            height: 40px;
+            background-color: red;
+        }
+        
+        /* Shake animation for wrong answer */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake {
+            animation: shake 0.5s;
+            animation-iteration-count: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    
+    <!-- Custom Crosshair -->
+    <div id="crosshair">
+        <div class="crosshair-line-h"></div>
+        <div class="crosshair-line-v"></div>
+    </div>
+
+    <!-- UI Overlay (HUD) -->
+    <div class="ui-layer" id="hud" style="display: none;">
+        <div class="flex justify-between items-start p-4">
+            <div class="text-white text-xl drop-shadow-md" style="text-shadow: 2px 2px 0 #000;">
+                MARKAH: <span id="score-display" class="text-yellow-400">0</span>
+            </div>
+            <div class="text-white text-sm" style="text-shadow: 2px 2px 0 #000;">
+                SOALAN: <span id="q-counter">1/7</span>
+            </div>
+        </div>
+
+        <div id="question-panel" class="pixel-border mx-auto mt-2">
+            <h2 id="q-text" class="text-sm md:text-base leading-relaxed text-yellow-300 mb-4">Soalan dimuatkan...</h2>
+            <div id="options-container" class="grid grid-cols-2 gap-4">
+                <!-- Options injected here -->
+            </div>
+        </div>
+        
+        <div class="absolute bottom-4 right-4 text-white text-xs opacity-50">
+            Tembak itik dengan abjad yang betul!
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay">
+        <div class="text-center p-8 bg-[#8B4513] pixel-border max-w-2xl">
+            <h1 class="text-3xl text-yellow-400 mb-6 leading-loose">Misi Memburu Itik<br><span class="text-white text-xl">Kenali Frasa Nama</span></h1>
+            <p class="text-white text-xs leading-loose mb-8 text-left">
+                Arahan:<br><br>
+                1. Baca soalan di bahagian atas skrin.<br>
+                2. Halakan kursor (scope) ke arah itik yang bergerak.<br>
+                3. Tembak itik yang membawa abjad (A, B, C, atau D) jawapan yang betul.<br>
+                4. Anda perlu mencuba sehingga betul untuk ke soalan seterusnya.
+            </p>
+            <button id="start-btn" class="btn-minecraft pixel-border">MULA BERMAIN</button>
+        </div>
+    </div>
+
+    <!-- End Screen -->
+    <div id="end-screen" class="overlay hidden">
+        <div class="text-center p-8 bg-[#8B4513] pixel-border max-w-md">
+            <h1 class="text-3xl text-green-400 mb-4">TAHNIAH!</h1>
+            <p class="text-white text-sm mb-6 leading-loose">Anda telah melengkapkan semua soalan dengan cemerlang!</p>
+            <div class="text-xl text-yellow-400 mb-8">
+                Markah Akhir: <span id="final-score">0</span>
+            </div>
+            <button id="restart-btn" class="btn-minecraft pixel-border">MAIN LAGI</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DATA SOALAN ---
+    const questionsData = [
+        { q: "1. 'Seorang ayah' merupakan frasa…", options: { A: "Frasa Nama", B: "Frasa Kerja", C: "Frasa Adjektif", D: "Frasa Sendi Nama" }, ans: "A" },
+        { q: "2. Antara berikut, yang manakah frasa nama?", options: { A: "Sangat cantik", B: "Daripada ibu", C: "Seekor kucing belang", D: "Mencuci baju" }, ans: "C" },
+        { q: "3. 'Sangat cantik' merupakan frasa nama.", options: { A: "Betul", B: "Salah" }, ans: "B" },
+        { q: "4. Pilih frasa nama yang betul:", options: { A: "Sungguh mahal", B: "Kereta ayah saya", C: "Daripada nenek dia", D: "Bermain bola" }, ans: "B" },
+        { q: "5. 'Bunga Mawar itu' ialah frasa nama.", options: { A: "Betul", B: "Salah" }, ans: "A" },
+        { q: "6. Yang manakah frasa nama?", options: { A: "Sangat rajin", B: "Ke pasar raya Giant", C: "Telefon pintar Iphone", D: "Menyanyikan lagu" }, ans: "C" },
+        { q: "7. Pilih frasa nama yang betul.", options: { A: "Memasak nasi lemak", B: "Guru besar sekolah", C: "Sangat bersih dan kemas", D: "Dari rumah" }, ans: "B" }
+    ];
+
+    // --- SISTEM AUDIO (Web Audio API Synthesizer) ---
+    // Tiada fail luaran diperlukan. Menjana bunyi gaya 8-bit.
+    const AudioSys = {
+        ctx: null,
+        bgmOsc: null,
+        bgmGain: null,
+        bgmInterval: null,
+        isPlayingBGM: false,
+
+        init: function() {
+            if (!this.ctx) {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        },
+
+        playShoot: function() {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            // Pew sound effect
+            osc.frequency.setValueAtTime(800, t);
+            osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            
+            osc.start(t);
+            osc.stop(t + 0.1);
+        },
+
+        playCorrect: function() {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            // Ding ding
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.setValueAtTime(800, t + 0.1);
+            
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.5, t + 0.05);
+            gain.gain.linearRampToValueAtTime(0, t + 0.3);
+            
+            osc.start(t);
+            osc.stop(t + 0.3);
+        },
+
+        playWrong: function() {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            
+            // Buzz
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.linearRampToValueAtTime(100, t + 0.3);
+            
+            gain.gain.setValueAtTime(0.5, t);
+            gain.gain.linearRampToValueAtTime(0.01, t + 0.3);
+            
+            osc.start(t);
+            osc.stop(t + 0.3);
+        },
+
+        playWin: function() {
+            this.stopBGM();
+            if (!this.ctx) return;
+            
+            const notes = [440, 554, 659, 880]; // A major chord
+            let time = this.ctx.currentTime;
+            
+            notes.forEach((freq, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.2, time);
+                gain.gain.linearRampToValueAtTime(0, time + 0.3);
+                
+                osc.start(time);
+                osc.stop(time + 0.3);
+                time += 0.15;
+            });
+        },
+
+        startBGM: function() {
+            if (!this.ctx || this.isPlayingBGM) return;
+            this.isPlayingBGM = true;
+            
+            // Suspenseful repeating bassline
+            const notes = [130.81, 130.81, 146.83, 155.56]; // C3, C3, D3, Eb3
+            let step = 0;
+            const tempo = 200; // ms per step
+
+            this.bgmInterval = setInterval(() => {
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(notes[step % notes.length], t);
+                
+                gain.gain.setValueAtTime(0.15, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + (tempo/1000) * 0.8);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                
+                osc.start(t);
+                osc.stop(t + (tempo/1000));
+                
+                step++;
+            }, tempo);
+        },
+
+        stopBGM: function() {
+            if (this.bgmInterval) {
+                clearInterval(this.bgmInterval);
+                this.isPlayingBGM = false;
+            }
+        }
+    };
+
+
+    // --- ENJIN PERMAINAN CANVAS ---
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('game-container');
+    const crosshair = document.getElementById('crosshair');
+
+    let w, h;
+    let mouseX = -1000;
+    let mouseY = -1000;
+    let ducks = [];
+    let shelves = [];
+    
+    // State permainan
+    let currentQIndex = 0;
+    let score = 0;
+    let isPlaying = false;
+    let frameId;
+
+    // Laraskan saiz canvas
+    function resize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = w;
+        canvas.height = h;
+        
+        // Kira posisi rak (Shelves)
+        // Kita perlukan 3 rak.
+        let usableHeight = h * 0.6; // Ruang bawah untuk rak
+        let startY = h * 0.4; // Bermula di bawah soalan
+        let shelfSpacing = usableHeight / 3;
+        
+        shelves = [
+            startY + shelfSpacing * 0,
+            startY + shelfSpacing * 1,
+            startY + shelfSpacing * 2
+        ];
+    }
+    window.addEventListener('resize', resize);
+
+    // Jejaki tetikus untuk crosshair dan scope
+    container.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+        
+        crosshair.style.left = mouseX + 'px';
+        crosshair.style.top = mouseY + 'px';
+    });
+
+    // Touch support untuk peranti mudah alih
+    container.addEventListener('touchmove', (e) => {
+        if(!isPlaying) return;
+        e.preventDefault(); // Halang scrolling
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.touches[0].clientX - rect.left;
+        mouseY = e.touches[0].clientY - rect.top;
+        crosshair.style.left = mouseX + 'px';
+        crosshair.style.top = mouseY + 'px';
+    }, {passive: false});
+
+    // Kelas Itik (Duck Entity) - Minecraft Style
+    class Duck {
+        constructor(letter, row) {
+            this.letter = letter;
+            this.row = row; // 0, 1, atau 2 (merujuk kepada rak)
+            
+            // Saiz responsif
+            this.size = Math.min(w, h) * 0.12; 
+            if(this.size < 60) this.size = 60;
+            if(this.size > 120) this.size = 120;
+
+            this.y = shelves[row] - this.size; // Berdiri atas rak
+            
+            // Bergerak ke kiri atau kanan rawak
+            this.direction = Math.random() > 0.5 ? 1 : -1;
+            
+            // Bermula di luar skrin
+            this.x = this.direction === 1 ? -this.size * 2 : w + this.size * 2;
+            
+            // Kelajuan rawak sedikit
+            this.speed = (Math.random() * 2 + 1.5) * (w / 1000); 
+            
+            this.active = true;
+        }
+
+        update() {
+            if (!this.active) return;
+            this.x += this.speed * this.direction;
+            
+            // Wrap around skrin
+            if (this.direction === 1 && this.x > w + this.size) {
+                this.x = -this.size;
+            } else if (this.direction === -1 && this.x < -this.size) {
+                this.x = w + this.size;
+            }
+        }
+
+        draw(ctx) {
+            if (!this.active) return;
+            
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            
+            // Jika bergerak ke kiri, flip grafik
+            if (this.direction === -1) {
+                ctx.scale(-1, 1);
+                ctx.translate(-this.size, 0); // betulkan posisi selepas flip
+            }
+
+            const u = this.size / 10; // Unit piksel
+            
+            // --- Lukis Itik Piksel (Minecraft style) ---
+            // Badan kuning
+            ctx.fillStyle = "#FFD700";
+            ctx.fillRect(u*2, u*3, u*7, u*6);
+            ctx.fillStyle = "#DAA520"; // shadow
+            ctx.fillRect(u*2, u*8, u*7, u*1);
+            
+            // Kepala
+            ctx.fillStyle = "#FFD700";
+            ctx.fillRect(u*6, u*0, u*4, u*4);
+            
+            // Mata
+            ctx.fillStyle = "#000";
+            ctx.fillRect(u*8, u*1, u*1, u*1);
+            
+            // Paruh jingga
+            ctx.fillStyle = "#FF8C00";
+            ctx.fillRect(u*10, u*2, u*2, u*1);
+            
+            // Sayap
+            ctx.fillStyle = "#DAA520";
+            ctx.fillRect(u*3, u*5, u*3, u*2);
+            
+            ctx.restore(); // Kembalikan scale asal untuk lukis Teks supaya tidak terbalik
+
+            // --- Lukis Papan Sasaran & Abjad ---
+            // Papan putih dengan bulatan merah (Sasaran)
+            const cx = this.x + (this.size / 2);
+            const cy = this.y + (this.size / 2) + (u*1); // Letak di tengah badan
+            const targetSize = this.size * 0.45;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, targetSize, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+            ctx.lineWidth = u*0.3;
+            ctx.strokeStyle = "black";
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, targetSize * 0.6, 0, Math.PI * 2);
+            ctx.fillStyle = "#DD0000";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, targetSize * 0.2, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+
+            // Teks Abjad
+            ctx.fillStyle = "black";
+            ctx.font = `bold ${targetSize * 0.8}px 'Press Start 2P', sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(this.letter, cx, cy + (u*0.5)); // adjust sikit sbb fon
+        }
+
+        // Semak pelanggaran (hitbox segi empat)
+        isHit(tx, ty) {
+            return tx >= this.x && tx <= this.x + this.size &&
+                   ty >= this.y && ty <= this.y + this.size;
+        }
+    }
+
+    // --- LOGIK PERMAINAN ---
+
+    function loadQuestion(index) {
+        if (index >= questionsData.length) {
+            endGame();
+            return;
+        }
+
+        const qData = questionsData[index];
+        document.getElementById('q-text').innerText = qData.q;
+        document.getElementById('q-counter').innerText = (index + 1) + "/" + questionsData.length;
+        
+        const optsContainer = document.getElementById('options-container');
+        optsContainer.innerHTML = '';
+        
+        const letters = Object.keys(qData.options);
+        
+        // Bina UI Pilihan Jawapan
+        letters.forEach(letter => {
+            const div = document.createElement('div');
+            div.className = 'option-text text-white';
+            div.innerHTML = `<span class="text-yellow-400">[${letter}]</span> ${qData.options[letter]}`;
+            optsContainer.appendChild(div);
+        });
+
+        // Spawn itik berdasarkan bilangan pilihan
+        ducks = [];
+        // Pastikan itik diselerakkan di rak yang berbeza
+        let rows = [0, 1, 2];
+        // Shuffle rows untuk variasi
+        rows.sort(() => Math.random() - 0.5);
+
+        letters.forEach((letter, i) => {
+            // Jika 4 pilihan, rak akan berulang. It's fine.
+            let row = rows[i % 3]; 
+            ducks.push(new Duck(letter, row));
+        });
+    }
+
+    // Handle Tembakan (Klik)
+    function shoot(e) {
+        if (!isPlaying) return;
+        
+        // Touch or Mouse
+        let cx = mouseX;
+        let cy = mouseY;
+        
+        if(e.type === 'touchstart') {
+            const rect = canvas.getBoundingClientRect();
+            cx = e.touches[0].clientX - rect.left;
+            cy = e.touches[0].clientY - rect.top;
+            mouseX = cx; mouseY = cy;
+        }
+
+        AudioSys.playShoot();
+
+        const currentAns = questionsData[currentQIndex].ans;
+        let hitSomething = false;
+
+        for (let i = ducks.length - 1; i >= 0; i--) {
+            let d = ducks[i];
+            if (d.active && d.isHit(cx, cy)) {
+                hitSomething = true;
+                if (d.letter === currentAns) {
+                    // BETUL
+                    AudioSys.playCorrect();
+                    score += 10;
+                    document.getElementById('score-display').innerText = score;
+                    d.active = false; // Hilangkan itik yang ditembak
+                    
+                    // Ke soalan seterusnya selepas delay sekejap
+                    setTimeout(() => {
+                        currentQIndex++;
+                        loadQuestion(currentQIndex);
+                    }, 500);
+
+                } else {
+                    // SALAH
+                    AudioSys.playWrong();
+                    score = Math.max(0, score - 2); // Tolak markah sikit
+                    document.getElementById('score-display').innerText = score;
+                    
+                    // Kesan gegar pada skrin
+                    document.body.classList.add('shake');
+                    setTimeout(() => {
+                        document.body.classList.remove('shake');
+                    }, 500);
+                }
+                break; // Hanya hit satu itik pada satu masa
+            }
+        }
+    }
+
+    container.addEventListener('mousedown', shoot);
+    container.addEventListener('touchstart', (e) => {
+        // Prevent default tap behaviors
+        if(e.target === canvas) {
+            e.preventDefault();
+            shoot(e);
+        }
+    }, {passive: false});
+
+
+    // --- LOOP RENDER UTAMA ---
+    function gameLoop() {
+        if (!isPlaying) return;
+
+        // Kosongkan Canvas
+        ctx.clearRect(0, 0, w, h);
+
+        // 1. Lukis Latar Belakang (Langit - sudah set di CSS, tapi mari buat awan Minecraft)
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.fillRect(w*0.1, h*0.1, w*0.15, h*0.05);
+        ctx.fillRect(w*0.15, h*0.05, w*0.1, h*0.05);
+        
+        ctx.fillRect(w*0.7, h*0.2, w*0.2, h*0.08);
+        ctx.fillRect(w*0.75, h*0.15, w*0.1, h*0.05);
+
+        // 2. Lukis Rak (Shelves) - Tanah Minecraft
+        shelves.forEach(sy => {
+            // Ketebalan rak
+            const shelfH = 20;
+            // Rumput atas
+            ctx.fillStyle = "#4CAF50"; // Green grass
+            ctx.fillRect(0, sy, w, shelfH * 0.3);
+            // Tanah bawah
+            ctx.fillStyle = "#8B4513"; // Dirt brown
+            ctx.fillRect(0, sy + shelfH * 0.3, w, shelfH * 0.7);
+        });
+
+        // 3. Update & Lukis Itik
+        ducks.forEach(d => {
+            d.update();
+            d.draw(ctx);
+        });
+
+        // 4. Kesan Lampu Suluh / Scope (Membina ketegangan)
+        // Lukis layer hitam semi-transparent di seluruh canvas
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, w, h);
+
+        // Tebuk lubang bulat di posisi tetikus
+        if (mouseX > -100) {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            // Saiz lubang responsif
+            let radius = Math.min(w, h) * 0.25;
+            if(radius < 150) radius = 150;
+            
+            ctx.arc(mouseX, mouseY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Blur sikit hujung lubang (soft edge)
+            const gradient = ctx.createRadialGradient(mouseX, mouseY, radius*0.8, mouseX, mouseY, radius);
+            gradient.addColorStop(0, 'rgba(0,0,0,1)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // Kembalikan mode komposit
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // Lukis reticle merah nipis di dalam scope (Canvas)
+            ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(mouseX, mouseY, radius * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(mouseX - radius, mouseY);
+            ctx.lineTo(mouseX + radius, mouseY);
+            ctx.moveTo(mouseX, mouseY - radius);
+            ctx.lineTo(mouseX, mouseY + radius);
+            ctx.stroke();
+        }
+
+        frameId = requestAnimationFrame(gameLoop);
+    }
+
+    // --- KAWALAN GAME ---
+
+    function startGame() {
+        AudioSys.init();
+        AudioSys.startBGM();
+        
+        resize();
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('hud').style.display = 'block';
+        
+        currentQIndex = 0;
+        score = 0;
+        document.getElementById('score-display').innerText = score;
+        
+        loadQuestion(currentQIndex);
+        
+        isPlaying = true;
+        crosshair.style.display = 'block';
+        gameLoop();
+    }
+
+    function endGame() {
+        isPlaying = false;
+        cancelAnimationFrame(frameId);
+        crosshair.style.display = 'none';
+        
+        AudioSys.playWin();
+        
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('end-screen').classList.remove('hidden');
+        document.getElementById('final-score').innerText = score;
+    }
+
+    // Event Listeners Butang
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('restart-btn').addEventListener('click', () => {
+        document.getElementById('end-screen').classList.add('hidden');
+        startGame();
+    });
+
+    // Inisialisasi awal UI
+    resize();
+</script>
+</body>
+</html>
